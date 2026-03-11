@@ -1,0 +1,38 @@
+NeuralAquarium
+A living digital aquarium powered by physics simulation, neural networks, and genetic algorithms — all built from scratch, no ML libraries.
+
+What is this? Emergent Aquarium is an interactive ecosystem simulation disguised as a fish tank. Each fish is an autonomous organism with energy, age, and DNA — driven by real algorithms running under the hood:
+
+Physics engine with repulsive forces and spring dynamics governing movement Neural network (built from scratch with backpropagation) that learns from the ecosystem's behavior in real-time Genetic algorithm with tournament selection, crossover, and mutation that evolves the population over generations Markov chains & Perlin noise generating organic, procedural behavior K-means clustering & dimensionality reduction analyzing the population structure
+
+Fish are born, compete for energy, reproduce, and die. The fittest survive. The neural network observes and adapts. You control the environment.
+
+Features Real-time ecosystem — fish live, breed, and die based on energy and environmental pressures Self-training neural network — a 4→12→8→4 network trains on ecosystem state every few ticks, learning to predict system health Genetic evolution — organisms inherit traits from parents with mutation; consume_rate evolves across generations Interactive controls — tune current strength, turbulence, schooling behavior, and hunger in real-time Immersive visuals — animated fish with fins, light rays, caustics, swaying plants, bubbles, and a sandy floor Live telemetry — population timeline, neural network error curve, generation tracking, and per-fish stats
+
+Quick Start:
+
+pip install -r requirements.txt python run.py Open http://localhost:5000 and do whatever
+
+Controls ControlEffectCurrentStrength of the simulation forcesTurbulenceRandomness and chaos in fish movementSchoolingHow strongly fish are drawn togetherHungerRate of energy decay ActionEffectWaveSend a shockwave from the centerScareScatter all fish randomlySchoolPull fish toward the centerEvolveRun one generation of the genetic algorithmFeedGive energy to all living fishRestockReset the tank with a fresh population InteractionHowSelect a fishClick on itDrag a fishClick & drag in interact/sculpt modeSpawn a fishDouble-click in sculpt modeDrop foodDouble-click in observe mode
+
+The Science This project demonstrates emergence — complex, lifelike behavior arising from simple rules:
+
+No fish is programmed to "swim" — movement emerges from repulsive forces, spring connections, and random noise No fish is told to "flock" — schooling behavior emerges from the cohesion parameter pulling organisms toward shared attractors No fish is designed to "evolve" — natural selection happens because organisms with lower consume_rate survive longer and reproduce more The neural network isn't pre-trained — it learns by observing the ecosystem, getting better at predicting system health as the simulation runs
+
+The same principles drive real biological systems, from bacterial colonies to bird flocks.
+
+Technical Details Zero external ML/AI dependencies. Every algorithm is implemented from scratch in pure Python:
+
+Matrix multiplication, sigmoid activation, and backpropagation (gamma.py) Tournament selection, single-point crossover, and Gaussian mutation (delta.py) Markov chain construction and random walks (epsilon.py) 1D Perlin noise with octave layering (epsilon.py) K-means clustering with random initialization (epsilon.py) Random projection for dimensionality reduction (epsilon.py) N-body repulsion and Hooke's law spring simulation (alpha.py)
+
+The only dependency is Flask for serving the web interface.
+
+Requirements
+
+Python 3.8+ Flask 3.0
+
+That's it.
+
+License MIT — do whatever you want with it.
+
+Built as an experiment in emergent systems. No fish were harmed in the making of this aquarium.
