@@ -3,6 +3,71 @@ import random
 import time
 
 
+class Genome:
+    DEFAULTS = {
+        "body_length": 1.0,
+        "body_width": 1.0,
+        "tail_length": 1.0,
+        "tail_width": 1.0,
+        "tail_freq": 1.0,
+        "dorsal_height": 1.0,
+        "dorsal_offset": 0.5,
+        "pec_size": 1.0,
+        "eye_size": 1.0,
+        "eye_offset": 0.7,
+        "hue_r": 0.5,
+        "hue_g": 0.7,
+        "hue_b": 0.8,
+        "pattern_type": 0.0,
+        "pattern_density": 0.5,
+        "pattern_contrast": 0.3,
+        "belly_brightness": 0.6,
+        "stripe_count": 0.3,
+        "mouth_size": 0.5,
+        "consume_rate": 0.5,
+    }
+
+    def __init__(self, genes=None):
+        if genes:
+            self._g = dict(genes)
+        else:
+            self._g = {}
+            for k, v in self.DEFAULTS.items():
+                self._g[k] = v + random.gauss(0, 0.15)
+            self._clamp()
+
+    def _clamp(self):
+        for k in self._g:
+            self._g[k] = max(0.05, min(1.95, self._g[k]))
+
+    def get(self, key):
+        return self._g.get(key, self.DEFAULTS.get(key, 0.5))
+
+    def crossover(self, other):
+        child_genes = {}
+        for k in self._g:
+            if random.random() < 0.5:
+                child_genes[k] = self._g[k]
+            else:
+                child_genes[k] = other._g.get(k, self._g[k])
+        return Genome(child_genes)
+
+    def mutate(self, rate=0.15, strength=0.1):
+        for k in self._g:
+            if random.random() < rate:
+                self._g[k] += random.gauss(0, strength)
+        self._clamp()
+
+    def serialize(self):
+        return {k: round(v, 4) for k, v in self._g.items()}
+
+    def distance(self, other):
+        d = 0
+        for k in self._g:
+            d += (self._g[k] - other._g.get(k, 0.5)) ** 2
+        return math.sqrt(d)
+
+
 class NodeEntity:
     def __init__(self, x, y, m=1.0):
         self._x = x
@@ -20,7 +85,8 @@ class NodeEntity:
         self._alive = True
         self._generation = 0
         self._birth_time = time.time()
-        self._consume_rate = random.uniform(0.2, 0.8)
+        self._genome = Genome()
+        self._consume_rate = self._genome.get("consume_rate") * 0.8 + 0.2
         self._emit_trail = []
 
     def bind(self, other, k=0.01, rest=100.0):
@@ -64,6 +130,8 @@ class NodeEntity:
             return
         speed = math.sqrt(self._vx**2 + self._vy**2)
         cost = base_cost * self._consume_rate + speed * 0.01 + entropy * 0.1
+        body_size = self._genome.get("body_length") * self._genome.get("body_width")
+        cost *= 0.7 + body_size * 0.3
         self._energy -= cost
         self._age += 1
 
@@ -104,6 +172,7 @@ class NodeEntity:
             "alive": self._alive,
             "gen": self._generation,
             "trail": self._emit_trail[-6:],
+            "dna": self._genome.serialize(),
         }
 
 
@@ -118,13 +187,16 @@ class Field:
         self._deaths = 0
         self._graveyard = []
 
-    def spawn(self, tag=None, pinned=False, generation=0):
+    def spawn(self, tag=None, pinned=False, generation=0, genome=None):
         x = random.uniform(50, self._w - 50)
         y = random.uniform(50, self._h - 50)
         n = NodeEntity(x, y)
         n._tag = tag
         n._pinned = pinned
         n._generation = generation
+        if genome:
+            n._genome = genome
+            n._consume_rate = genome.get("consume_rate") * 0.8 + 0.2
         self._nodes.append(n)
         return n
 
@@ -142,6 +214,7 @@ class Field:
                     "gen": d._generation,
                     "x": d._x,
                     "y": d._y,
+                    "dna": d._genome.serialize(),
                 }
             )
         self._deaths += len(dead)
@@ -157,15 +230,30 @@ class Field:
         for parent in parents[:3]:
             if len(self._nodes) >= max_pop:
                 break
+
+            # find a mate nearby
+            nearby_alive = [n for n in self._nodes if n._alive and n is not parent]
+            if nearby_alive:
+                mate = min(
+                    nearby_alive,
+                    key=lambda n: (n._x - parent._x) ** 2 + (n._y - parent._y) ** 2,
+                )
+            else:
+                mate = parent
+
+            child_genome = parent._genome.crossover(mate._genome)
+            child_genome.mutate(rate=0.2, strength=0.12)
+
             child = self.spawn(
-                tag=f"c_{random.randint(1000, 9999)}", generation=parent._generation + 1
+                tag=f"c_{random.randint(1000, 9999)}",
+                generation=max(parent._generation, mate._generation) + 1,
+                genome=child_genome,
             )
             child._x = parent._x + random.gauss(0, 30)
             child._y = parent._y + random.gauss(0, 30)
-            child._consume_rate = parent._consume_rate + random.gauss(0, 0.05)
-            child._consume_rate = max(0.05, min(1.5, child._consume_rate))
             child._energy = 60.0
             parent._energy -= 35.0
+
             self.connect(parent, child, k=0.008, rest=80)
             nearby = sorted(
                 self._nodes,

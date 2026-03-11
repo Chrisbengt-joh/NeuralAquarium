@@ -100,13 +100,14 @@ def build_response():
                 "label": nd.get("t", "?"),
                 "group": "live" if nd.get("alive", True) else "dead",
                 "w": nd.get("energy", 0),
-                "hue": energy_to_color(nd.get("energy", 0)),
+                "hue": "#4488aa",
                 "r": max(3, nd.get("energy", 50) / 10),
                 "energy": nd.get("energy", 0),
                 "age": nd.get("age", 0),
                 "alive": nd.get("alive", True),
                 "gen": nd.get("gen", 0),
                 "trail": nd.get("trail", []),
+                "dna": nd.get("dna", {}),
             }
         )
 

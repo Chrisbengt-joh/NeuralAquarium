@@ -12,7 +12,6 @@
     let W, H, TW, TH;
     let STATE = { nodes: [], edges: [], epoch: 0, mode: 'observe', selected: null, params: { intensity: 50, entropy: 30, cohesion: 60, decay: 20 }, history: [], dragging: null, mouse: { x: 0, y: 0 }, running: true, nn_history: [], pool_history: [] };
     let AF;
-    let particles = [];
     let bubbles = [];
     let plants = [];
     let tick = 0;
@@ -113,32 +112,45 @@
         STATS.innerHTML = html;
     }
 
-    // ---- FISH RENDERING ----
+    // ---- DNA-DRIVEN FISH RENDERING ----
 
-    function fishColor(energy, hue) {
-        if (!hue) hue = 'rgb(50,150,200)';
-        // parse existing hue or generate from energy
+    function dnaColor(dna, energy) {
         const vitality = Math.min(1, energy / 100);
-        if (energy > 80) {
-            const r = 30 + Math.floor(vitality * 40);
-            const g = 150 + Math.floor(vitality * 80);
-            const b = 180 + Math.floor(vitality * 60);
-            return { body: `rgb(${r},${g},${b})`, belly: `rgba(${r + 60},${g + 40},${b + 30},0.6)`, fin: `rgba(${r - 10},${g + 20},${b + 40},0.7)` };
-        } else if (energy > 40) {
-            const t = energy / 80;
-            return { body: `rgb(${80 + Math.floor(t * 60)},${100 + Math.floor(t * 80)},${120 + Math.floor(t * 80)})`, belly: `rgba(180,180,160,0.5)`, fin: `rgba(60,120,160,0.6)` };
-        } else {
-            return { body: `rgb(${100 + Math.floor(vitality * 40)},${80 + Math.floor(vitality * 40)},${70 + Math.floor(vitality * 30)})`, belly: 'rgba(140,120,100,0.4)', fin: 'rgba(80,70,60,0.5)' };
-        }
+        const r = Math.floor((dna.hue_r || 0.5) * 200 * vitality + 30);
+        const g = Math.floor((dna.hue_g || 0.7) * 220 * vitality + 30);
+        const b = Math.floor((dna.hue_b || 0.8) * 230 * vitality + 40);
+        const br = dna.belly_brightness || 0.6;
+        return {
+            body: `rgb(${r},${g},${b})`,
+            belly: `rgba(${Math.min(255, r + Math.floor(br * 80))},${Math.min(255, g + Math.floor(br * 60))},${Math.min(255, b + Math.floor(br * 40))},0.55)`,
+            fin: `rgba(${Math.max(0, r - 20)},${Math.min(255, g + 30)},${Math.min(255, b + 50)},0.65)`,
+            pattern: `rgba(${Math.max(0, r - 40)},${Math.max(0, g - 30)},${Math.max(0, b - 20)},${(dna.pattern_contrast || 0.3) * 0.6})`
+        };
     }
 
     function drawFish(n, i) {
         if (!n.alive) return;
         const x = n.x, y = n.y;
-        const size = Math.max(8, Math.min(28, (n.r || 8) * 1.8));
-        const colors = fishColor(n.energy, n.hue);
+        const dna = n.dna || {};
+        const baseSize = Math.max(8, Math.min(28, (n.r || 8) * 1.8));
 
-        // determine direction from trail or default
+        const bodyLen = (dna.body_length || 1) * baseSize * 0.55;
+        const bodyWid = (dna.body_width || 1) * baseSize * 0.3;
+        const tailLen = (dna.tail_length || 1) * baseSize * 0.6;
+        const tailWid = (dna.tail_width || 1) * baseSize * 0.5;
+        const tailFreq = (dna.tail_freq || 1) * 0.15;
+        const dorsalH = (dna.dorsal_height || 1) * baseSize * 0.35;
+        const dorsalOff = (dna.dorsal_offset || 0.5);
+        const pecSize = (dna.pec_size || 1) * baseSize * 0.2;
+        const eyeSize = (dna.eye_size || 1) * baseSize * 0.09;
+        const eyeOff = (dna.eye_offset || 0.7);
+        const mouthSize = (dna.mouth_size || 0.5) * baseSize * 0.06;
+        const patternType = dna.pattern_type || 0;
+        const patternDensity = dna.pattern_density || 0.5;
+        const stripeCount = Math.floor((dna.stripe_count || 0.3) * 5) + 1;
+
+        const colors = dnaColor(dna, n.energy);
+
         let angle = 0;
         if (n.trail && n.trail.length >= 2) {
             const last = n.trail[n.trail.length - 1];
@@ -146,7 +158,7 @@
             angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
         }
 
-        const tailWag = Math.sin(tick * 0.15 + i * 2) * 0.3;
+        const tailWag = Math.sin(tick * tailFreq + i * 2) * 0.35;
         const bodyWobble = Math.sin(tick * 0.08 + i * 1.5) * 1.5;
 
         CTX.save();
@@ -155,78 +167,136 @@
 
         // tail
         CTX.beginPath();
-        CTX.moveTo(-size * 0.4, 0);
-        const tailY1 = size * 0.5 * Math.sin(tick * 0.12 + i + tailWag);
-        const tailY2 = size * 0.7 * Math.sin(tick * 0.12 + i + tailWag + 0.5);
-        CTX.quadraticCurveTo(-size * 0.8, tailY1, -size * 1.1, tailY2);
-        CTX.quadraticCurveTo(-size * 0.8, -tailY1 * 0.3, -size * 0.4, 0);
+        CTX.moveTo(-bodyLen * 0.7, 0);
+        const ty1 = tailWid * Math.sin(tick * tailFreq * 0.8 + i + tailWag);
+        const ty2 = tailWid * 1.3 * Math.sin(tick * tailFreq * 0.8 + i + tailWag + 0.5);
+        CTX.quadraticCurveTo(-bodyLen * 0.7 - tailLen * 0.6, ty1, -bodyLen * 0.7 - tailLen, ty2);
+        CTX.quadraticCurveTo(-bodyLen * 0.7 - tailLen * 0.6, -ty1 * 0.3, -bodyLen * 0.7, 0);
         CTX.fillStyle = colors.fin;
         CTX.fill();
 
         // body
         CTX.beginPath();
-        CTX.ellipse(0, 0, size * 0.55, size * 0.3, 0, 0, Math.PI * 2);
+        CTX.ellipse(0, 0, bodyLen, bodyWid, 0, 0, Math.PI * 2);
         CTX.fillStyle = colors.body;
         CTX.globalAlpha = 0.9;
         CTX.fill();
 
-        // belly highlight
+        // patterns
+        CTX.save();
+        CTX.clip();
+        CTX.globalAlpha = (dna.pattern_contrast || 0.3) * 0.5;
+
+        if (patternType < 0.33) {
+            // stripes
+            for (let s = 0; s < stripeCount; s++) {
+                const sx = -bodyLen + bodyLen * 2 * (s + 0.5) / stripeCount;
+                CTX.beginPath();
+                CTX.ellipse(sx, 0, bodyLen * 0.08 * patternDensity, bodyWid * 1.1, 0, 0, Math.PI * 2);
+                CTX.fillStyle = colors.pattern;
+                CTX.fill();
+            }
+        } else if (patternType < 0.66) {
+            // spots
+            const spotCount = Math.floor(patternDensity * 8) + 2;
+            const rng = i * 137.5;
+            for (let s = 0; s < spotCount; s++) {
+                const sx = Math.cos(rng + s * 2.4) * bodyLen * 0.6;
+                const sy = Math.sin(rng + s * 3.1) * bodyWid * 0.5;
+                const sr = bodyLen * 0.06 + bodyLen * 0.04 * Math.sin(s * 1.7);
+                CTX.beginPath();
+                CTX.arc(sx, sy, sr, 0, Math.PI * 2);
+                CTX.fillStyle = colors.pattern;
+                CTX.fill();
+            }
+        } else {
+            // gradient band
+            const bandGrad = CTX.createLinearGradient(0, -bodyWid, 0, bodyWid);
+            bandGrad.addColorStop(0, 'transparent');
+            bandGrad.addColorStop(0.3, colors.pattern);
+            bandGrad.addColorStop(0.5, colors.pattern);
+            bandGrad.addColorStop(0.7, 'transparent');
+            CTX.fillStyle = bandGrad;
+            CTX.fillRect(-bodyLen, -bodyWid, bodyLen * 2, bodyWid * 2);
+        }
+
+        CTX.restore();
+
+        // belly
         CTX.beginPath();
-        CTX.ellipse(size * 0.05, size * 0.05, size * 0.35, size * 0.15, 0.1, 0, Math.PI * 2);
+        CTX.ellipse(bodyLen * 0.05, bodyWid * 0.15, bodyLen * 0.6, bodyWid * 0.45, 0.1, 0, Math.PI * 2);
         CTX.fillStyle = colors.belly;
+        CTX.globalAlpha = 0.5;
         CTX.fill();
+        CTX.globalAlpha = 1;
 
         // dorsal fin
+        const dorsalX = bodyLen * (dorsalOff - 0.5) * 0.8;
         const dorsalWag = Math.sin(tick * 0.1 + i) * 0.15;
         CTX.beginPath();
-        CTX.moveTo(size * 0.1, -size * 0.28);
-        CTX.quadraticCurveTo(0, -size * 0.55 + dorsalWag * size, -size * 0.15, -size * 0.28);
+        CTX.moveTo(dorsalX + bodyLen * 0.15, -bodyWid * 0.85);
+        CTX.quadraticCurveTo(dorsalX, -bodyWid * 0.85 - dorsalH + dorsalWag * baseSize, dorsalX - bodyLen * 0.2, -bodyWid * 0.85);
         CTX.fillStyle = colors.fin;
         CTX.globalAlpha = 0.6;
         CTX.fill();
 
         // pectoral fin
-        const pecWag = Math.sin(tick * 0.13 + i * 3) * 0.2;
+        const pecWag = Math.sin(tick * 0.13 + i * 3) * 0.25;
         CTX.beginPath();
-        CTX.moveTo(size * 0.1, size * 0.15);
-        CTX.quadraticCurveTo(size * 0.05, size * 0.4 + pecWag * size, size * -0.15, size * 0.22);
+        CTX.moveTo(bodyLen * 0.05, bodyWid * 0.6);
+        CTX.quadraticCurveTo(bodyLen * 0.0, bodyWid * 0.6 + pecSize + pecWag * pecSize, -bodyLen * 0.15, bodyWid * 0.65);
         CTX.fillStyle = colors.fin;
         CTX.globalAlpha = 0.5;
+        CTX.fill();
+
+        // second pectoral (smaller, behind)
+        CTX.beginPath();
+        CTX.moveTo(-bodyLen * 0.15, bodyWid * 0.55);
+        CTX.quadraticCurveTo(-bodyLen * 0.2, bodyWid * 0.55 + pecSize * 0.7 - pecWag * pecSize * 0.5, -bodyLen * 0.35, bodyWid * 0.55);
+        CTX.fillStyle = colors.fin;
+        CTX.globalAlpha = 0.35;
         CTX.fill();
 
         CTX.globalAlpha = 1;
 
         // eye
-        const eyeX = size * 0.32;
-        const eyeY = -size * 0.05;
+        const eyeX = bodyLen * eyeOff;
+        const eyeY = -bodyWid * 0.15;
         CTX.beginPath();
-        CTX.arc(eyeX, eyeY, size * 0.09, 0, Math.PI * 2);
+        CTX.arc(eyeX, eyeY, eyeSize, 0, Math.PI * 2);
         CTX.fillStyle = '#e8e8e0';
         CTX.fill();
+        // iris
         CTX.beginPath();
-        CTX.arc(eyeX + size * 0.02, eyeY, size * 0.05, 0, Math.PI * 2);
+        CTX.arc(eyeX + eyeSize * 0.2, eyeY, eyeSize * 0.6, 0, Math.PI * 2);
+        CTX.fillStyle = `rgb(${Math.floor(30 + (dna.hue_r || 0.5) * 40)},${Math.floor(20 + (dna.hue_g || 0.5) * 30)},${Math.floor(10 + (dna.hue_b || 0.5) * 20)})`;
+        CTX.fill();
+        // pupil
+        CTX.beginPath();
+        CTX.arc(eyeX + eyeSize * 0.25, eyeY, eyeSize * 0.35, 0, Math.PI * 2);
         CTX.fillStyle = '#111';
         CTX.fill();
+        // glint
         CTX.beginPath();
-        CTX.arc(eyeX + size * 0.035, eyeY - size * 0.015, size * 0.02, 0, Math.PI * 2);
+        CTX.arc(eyeX + eyeSize * 0.4, eyeY - eyeSize * 0.2, eyeSize * 0.18, 0, Math.PI * 2);
         CTX.fillStyle = '#fff';
         CTX.fill();
 
         // mouth
         CTX.beginPath();
-        CTX.arc(size * 0.5, size * 0.02, size * 0.04, 0, Math.PI);
+        CTX.arc(bodyLen * 0.9, bodyWid * 0.05, mouthSize, 0, Math.PI);
         CTX.strokeStyle = 'rgba(0,0,0,0.3)';
         CTX.lineWidth = 0.8;
         CTX.stroke();
 
         CTX.restore();
 
-        // energy bar (subtle)
+        // energy bar
         if (STATE.selected === i || n.energy < 40) {
-            const barW = size * 1.2;
+            const barW = baseSize * 1.2;
             const barH = 2;
             const barX = x - barW / 2;
-            const barY = y - size * 0.5 - 8;
+            const barY = y - baseSize * 0.5 - 10;
             CTX.fillStyle = 'rgba(0,0,0,0.3)';
             CTX.fillRect(barX, barY, barW, barH);
             const pct = Math.min(1, n.energy / 100);
@@ -239,31 +309,30 @@
             CTX.globalAlpha = 0.25;
             CTX.fillStyle = '#aaddff';
             CTX.font = '7px monospace';
-            CTX.fillText('g' + n.gen, x + size * 0.6, y - size * 0.4);
+            CTX.fillText('g' + n.gen, x + baseSize * 0.6, y - baseSize * 0.4);
             CTX.globalAlpha = 1;
         }
 
-        // selected highlight
+        // selected ring
         if (STATE.selected === i) {
             CTX.beginPath();
-            CTX.arc(x, y, size * 0.8, 0, Math.PI * 2);
-            CTX.strokeStyle = 'rgba(100,200,255,0.4)';
+            CTX.arc(x, y, baseSize * 0.9, 0, Math.PI * 2);
+            CTX.strokeStyle = 'rgba(100,200,255,0.35)';
             CTX.lineWidth = 1.5;
             CTX.setLineDash([3, 3]);
             CTX.stroke();
             CTX.setLineDash([]);
         }
 
-        // random bubbles
+        // ambient bubbles
         if (Math.random() < 0.003 && n.alive) {
-            spawnBubble(x + size * 0.5 * Math.cos(angle), y + size * 0.5 * Math.sin(angle));
+            spawnBubble(x + bodyLen * Math.cos(angle), y + bodyLen * Math.sin(angle));
         }
     }
 
     // ---- ENVIRONMENT ----
 
     function drawWater() {
-        // gradient background
         const grad = CTX.createLinearGradient(0, 0, 0, H);
         grad.addColorStop(0, '#061828');
         grad.addColorStop(0.3, '#082038');
@@ -272,7 +341,6 @@
         CTX.fillStyle = grad;
         CTX.fillRect(0, 0, W, H);
 
-        // light rays from top
         CTX.save();
         for (let i = 0; i < 5; i++) {
             const rx = W * 0.15 + i * W * 0.18;
@@ -291,7 +359,6 @@
         }
         CTX.restore();
 
-        // caustic shimmer
         CTX.globalAlpha = 0.03;
         for (let i = 0; i < 8; i++) {
             const cx = Math.sin(tick * 0.01 + i * 1.3) * W * 0.4 + W / 2;
@@ -314,20 +381,17 @@
         grad.addColorStop(1, '#162018');
         CTX.fillStyle = grad;
         CTX.fillRect(0, H - sandH, W, sandH);
-
-        // sand texture
         CTX.fillStyle = 'rgba(40,60,35,0.3)';
         for (let i = 0; i < W; i += 3) {
             const sh = Math.sin(i * 0.05) * 3 + Math.sin(i * 0.13) * 2;
             CTX.fillRect(i, H - sandH + sh, 2, 1);
         }
-
-        // pebbles
         CTX.globalAlpha = 0.2;
-        const rng = new Array(20).fill(0).map((_, i) => ({ x: (i * W / 20 + 15) % W, r: 2 + Math.sin(i * 7) * 2 }));
-        for (const p of rng) {
+        for (let i = 0; i < 20; i++) {
+            const px = (i * W / 20 + 15) % W;
+            const pr = 2 + Math.sin(i * 7) * 2;
             CTX.beginPath();
-            CTX.ellipse(p.x, H - 12 + Math.sin(p.x) * 3, p.r, p.r * 0.6, 0, 0, Math.PI * 2);
+            CTX.ellipse(px, H - 12 + Math.sin(px) * 3, pr, pr * 0.6, 0, 0, Math.PI * 2);
             CTX.fillStyle = '#2a3a28';
             CTX.fill();
         }
@@ -340,20 +404,13 @@
                 const baseX = p.x + b * 6 - p.blades * 3;
                 const sway = Math.sin(tick * 0.025 + p.phase + b * 0.5) * 12;
                 const bladeH = p.h * (0.6 + b * 0.1);
-
                 CTX.beginPath();
                 CTX.moveTo(baseX, H - 35);
-
-                const cp1x = baseX + sway * 0.4;
-                const cp1y = H - 35 - bladeH * 0.4;
-                const cp2x = baseX + sway;
-                const cp2y = H - 35 - bladeH * 0.7;
-                const tipX = baseX + sway * 1.2;
-                const tipY = H - 35 - bladeH;
-
+                const cp1x = baseX + sway * 0.4, cp1y = H - 35 - bladeH * 0.4;
+                const cp2x = baseX + sway, cp2y = H - 35 - bladeH * 0.7;
+                const tipX = baseX + sway * 1.2, tipY = H - 35 - bladeH;
                 CTX.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, tipX, tipY);
                 CTX.bezierCurveTo(cp2x + 3, cp2y, cp1x + 3, cp1y, baseX + 3, H - 35);
-
                 CTX.fillStyle = `hsla(${p.hue},50%,${20 + b * 3}%,0.7)`;
                 CTX.fill();
             }
@@ -367,7 +424,6 @@
             b.x += Math.sin(tick * 0.05 + b.wobble) * 0.3;
             b.r -= 0.003;
             if (b.y < -10 || b.r <= 0) { bubbles.splice(i, 1); continue; }
-
             CTX.beginPath();
             CTX.arc(b.x, b.y, b.r, 0, Math.PI * 2);
             CTX.strokeStyle = 'rgba(150,200,255,0.3)';
@@ -402,9 +458,7 @@
             if (!a || !b || !a.alive || !b.alive) continue;
             CTX.beginPath();
             CTX.moveTo(a.x, a.y);
-            // curved connection
-            const mx = (a.x + b.x) / 2;
-            const my = (a.y + b.y) / 2 + Math.sin(tick * 0.03) * 5;
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 + Math.sin(tick * 0.03) * 5;
             CTX.quadraticCurveTo(mx, my, b.x, b.y);
             CTX.strokeStyle = 'rgba(60,120,180,0.06)';
             CTX.lineWidth = 0.5;
@@ -424,14 +478,11 @@
         CTX.fill();
     }
 
-    // ---- TIMELINE ----
-
     function drawTimeline() {
         TCTX.fillStyle = 'rgba(4,10,24,0.3)'; TCTX.fillRect(0, 0, TW, TH);
         if (STATE.history.length < 2) return;
         const last = STATE.history.slice(-200);
         const maxC = Math.max(...last.map(h => h.count), 1);
-
         TCTX.beginPath(); TCTX.strokeStyle = '#33ddaa'; TCTX.lineWidth = 1;
         for (let i = 0; i < last.length; i++) {
             const x = (i / (last.length - 1)) * TW;
@@ -439,7 +490,6 @@
             i === 0 ? TCTX.moveTo(x, y) : TCTX.lineTo(x, y);
         }
         TCTX.stroke();
-
         if (STATE.nn_history.length > 1) {
             const maxErr = Math.max(...STATE.nn_history.map(h => h.error), 0.01);
             TCTX.beginPath(); TCTX.strokeStyle = '#ff6655'; TCTX.lineWidth = 0.8;
@@ -454,8 +504,6 @@
         }
     }
 
-    // ---- MAIN RENDER ----
-
     function render() {
         tick++;
         drawWater();
@@ -467,11 +515,8 @@
         STATE.nodes.forEach((n, i) => drawFish(n, i));
         drawBubbles();
         drawTimeline();
-
         if (STATE.running) AF = requestAnimationFrame(render);
     }
-
-    // ---- INTERACTION ----
 
     function findNode(mx, my) {
         for (let i = STATE.nodes.length - 1; i >= 0; i--) {
@@ -482,6 +527,27 @@
             if (dx * dx + dy * dy < hitR * hitR) return i;
         }
         return -1;
+    }
+
+    function dnaDescription(dna) {
+        if (!dna) return '';
+        let traits = [];
+        if (dna.body_length > 1.3) traits.push('long');
+        else if (dna.body_length < 0.7) traits.push('compact');
+        if (dna.body_width > 1.3) traits.push('wide');
+        else if (dna.body_width < 0.7) traits.push('slim');
+        if (dna.tail_length > 1.3) traits.push('long-tailed');
+        else if (dna.tail_length < 0.7) traits.push('stub-tailed');
+        if (dna.dorsal_height > 1.3) traits.push('tall dorsal');
+        else if (dna.dorsal_height < 0.5) traits.push('flat dorsal');
+        if (dna.eye_size > 1.3) traits.push('big-eyed');
+        else if (dna.eye_size < 0.7) traits.push('small-eyed');
+        if (dna.pattern_type < 0.33) traits.push('striped');
+        else if (dna.pattern_type < 0.66) traits.push('spotted');
+        else traits.push('banded');
+        if (dna.consume_rate < 0.35) traits.push('efficient');
+        else if (dna.consume_rate > 0.7) traits.push('hungry');
+        return traits.join(', ');
     }
 
     CV.addEventListener('mousemove', e => {
@@ -496,13 +562,14 @@
         if (idx >= 0) {
             CV.style.cursor = 'pointer';
             const n = STATE.nodes[idx];
+            const traits = dnaDescription(n.dna);
             TT.style.display = 'block';
             TT.style.left = (STATE.mouse.x + 15) + 'px';
             TT.style.top = (STATE.mouse.y + 15) + 'px';
             TT.innerHTML = `<div style="color:#66ccff;font-weight:bold">${n.label}</div>`
                 + `<div>vitality: ${n.energy.toFixed(1)}</div>`
-                + `<div>age: ${n.age}</div>`
-                + `<div>generation: ${n.gen}</div>`;
+                + `<div>age: ${n.age} · gen ${n.gen}</div>`
+                + (traits ? `<div style="color:#88aacc;margin-top:3px">${traits}</div>` : '');
         } else {
             CV.style.cursor = 'default';
             TT.style.display = 'none';
@@ -515,11 +582,13 @@
             STATE.selected = idx;
             if (STATE.mode === 'interact' || STATE.mode === 'sculpt') STATE.dragging = idx;
             const n = STATE.nodes[idx];
-            SEL.innerHTML = `<div style="color:#66ccff;font-weight:bold">${n.label}</div>`
+            const traits = dnaDescription(n.dna);
+            SEL.innerHTML = `<div style="color:#66ccff;font-weight:bold;margin-bottom:4px">${n.label}</div>`
                 + `<div>vitality: ${n.energy.toFixed(1)}</div>`
                 + `<div>age: ${n.age}</div>`
                 + `<div>generation: ${n.gen}</div>`
-                + `<div>position: ${n.x.toFixed(0)}, ${n.y.toFixed(0)}</div>`;
+                + `<div>position: ${n.x.toFixed(0)}, ${n.y.toFixed(0)}</div>`
+                + (traits ? `<div style="color:#88aacc;margin-top:4px;border-top:1px solid #15305a;padding-top:4px">traits: ${traits}</div>` : '');
         } else {
             STATE.selected = null;
             SEL.textContent = 'tap a fish';
@@ -532,7 +601,6 @@
         if (STATE.mode === 'sculpt') {
             sendAction('spawn', { x: STATE.mouse.x, y: STATE.mouse.y });
         } else {
-            // drop food
             spawnFood(STATE.mouse.x, STATE.mouse.y);
             sendAction('feed_all');
         }
@@ -569,7 +637,6 @@
 
     function autoTick() {
         sendAction('tick');
-        // ambient bubbles
         if (Math.random() < 0.1) spawnBubble(Math.random() * W, H - 40);
         setTimeout(autoTick, 800);
     }
