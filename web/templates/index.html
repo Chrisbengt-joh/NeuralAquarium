@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            background: #040a18;
+            color: #c0c0c0;
+            font-family: 'Courier New', monospace;
+            overflow: hidden
+        }
+
+        #wrap {
+            display: flex;
+            height: 100vh;
+            width: 100vw
+        }
+
+        #left {
+            width: 220px;
+            background: #061020;
+            border-right: 1px solid #0a2040;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto
+        }
+
+        #mid {
+            flex: 1;
+            position: relative;
+            overflow: hidden
+        }
+
+        #right {
+            width: 280px;
+            background: #061020;
+            border-left: 1px solid #0a2040;
+            padding: 12px;
+            overflow-y: auto;
+            font-size: 11px
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%
+        }
+
+        .btn {
+            background: #0a1a35;
+            border: 1px solid #15305a;
+            color: #4488cc;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            transition: all 0.2s
+        }
+
+        .btn:hover {
+            background: #102a50;
+            color: #66aaee
+        }
+
+        .btn.active {
+            background: #15305a;
+            color: #88ccff;
+            border-color: #2060a0
+        }
+
+        .section {
+            margin-bottom: 12px
+        }
+
+        .section-title {
+            color: #2266aa;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 6px
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            border-bottom: 1px solid #081828
+        }
+
+        .stat-label {
+            color: #336688
+        }
+
+        .stat-value {
+            color: #66aacc
+        }
+
+        #tooltip {
+            position: absolute;
+            background: #081828ee;
+            border: 1px solid #15305a;
+            padding: 8px 12px;
+            font-size: 11px;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            max-width: 220px;
+            border-radius: 6px
+        }
+
+        .slider-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-bottom: 8px
+        }
+
+        .slider-wrap label {
+            font-size: 10px;
+            color: #2266aa
+        }
+
+        .slider-wrap input[type=range] {
+            width: 100%;
+            accent-color: #2266aa
+        }
+
+        #timeline {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(4, 10, 24, 0.9);
+            border-top: 1px solid #0a2040
+        }
+
+        #timeline canvas {
+            height: 60px
+        }
+
+        .mode-indicator {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #1a4a7a;
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase
+        }
+
+        .legend {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 9px
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%
+        }
+    </style>
+</head>
+
+<body>
+    <div id="wrap">
+        <div id="left">
+            <div class="section-title">modes</div>
+            <button class="btn active" data-mode="observe">observe</button>
+            <button class="btn" data-mode="interact">interact</button>
+            <button class="btn" data-mode="sculpt">sculpt</button>
+            <button class="btn" data-mode="analyze">analyze</button>
+            <div style="height:12px"></div>
+            <div class="section-title">environment</div>
+            <div class="slider-wrap">
+                <label>current</label>
+                <input type="range" id="s_intensity" min="0" max="100" value="50">
+            </div>
+            <div class="slider-wrap">
+                <label>turbulence</label>
+                <input type="range" id="s_entropy" min="0" max="100" value="30">
+            </div>
+            <div class="slider-wrap">
+                <label>schooling</label>
+                <input type="range" id="s_cohesion" min="0" max="100" value="60">
+            </div>
+            <div class="slider-wrap">
+                <label>hunger</label>
+                <input type="range" id="s_decay" min="0" max="100" value="20">
+            </div>
+            <div style="height:12px"></div>
+            <div class="section-title">actions</div>
+            <button class="btn" id="btn_pulse">wave</button>
+            <button class="btn" id="btn_scatter">scare</button>
+            <button class="btn" id="btn_collapse">school</button>
+            <button class="btn" id="btn_evolve">evolve</button>
+            <button class="btn" id="btn_feed">feed</button>
+            <button class="btn" id="btn_reset">restock</button>
+            <div style="height:12px"></div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#33ddaa"></div>pop
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ff6655"></div>err
+                </div>
+            </div>
+        </div>
+        <div id="mid">
+            <div class="mode-indicator" id="mode_label">observe</div>
+            <canvas id="main_canvas"></canvas>
+            <div id="tooltip"></div>
+            <div id="timeline"><canvas id="timeline_canvas"></canvas></div>
+        </div>
+        <div id="right">
+            <div class="section">
+                <div class="section-title">ecosystem</div>
+                <div id="stats_container"></div>
+            </div>
+            <div class="section">
+                <div class="section-title">selected</div>
+                <div id="selection_info">tap a fish</div>
+            </div>
+            <div class="section">
+                <div class="section-title">log</div>
+                <div id="log_container" style="max-height:300px;overflow-y:auto"></div>
+            </div>
+        </div>
+    </div>
+    <script src="/static/core.js"></script>
+</body>
+
+</html>
